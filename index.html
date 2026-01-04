@@ -5,88 +5,135 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Custom URL Shortener</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; text-align: center; background: #f4f4f4; }
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; text-align: center; background: #f4f4f4; }
         h1 { color: #333; }
-        input, button { padding: 10px; margin: 10px; font-size: 16px; width: 80%; max-width: 400px; }
-        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        input, button { padding: 12px; margin: 10px; font-size: 16px; width: 85%; max-width: 500px; border-radius: 6px; border: 1px solid #ccc; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background: #0056b3; }
-        #result { margin: 20px; font-size: 18px; word-break: break-all; }
-        .error { color: red; }
-        a { color: #007bff; }
+        #result { margin: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .short-link { font-size: 24px; font-weight: bold; color: #007bff; word-break: break-all; }
+        .error { color: red; font-weight: bold; }
+        .note { font-size: 14px; color: #666; margin-top: 30px; }
     </style>
 </head>
 <body>
-    <h1>Custom URL Shortener</h1>
-    <p>Enter a long URL and a custom short text (e.g., "etg" or "my-site").</p>
 
-    <input type="text" id="longUrl" placeholder="Long URL (e.g., https://elios-training-grounds.weebly.com/)">
-    <br>
-    <input type="text" id="customSlug" placeholder="Custom short text (letters, numbers, -, _ only — no spaces)">
-    <br>
-    <button onclick="createShortLink()">Create Short Link</button>
-
-    <div id="result"></div>
-
+    <!-- Redirect Logic for Short Links -->
     <script>
-        // Check if this page is being accessed as a short link (e.g., /my-site)
-        const path = window.location.pathname.substring(1); // Remove leading /
+        const path = window.location.pathname.substring(1).split('/')[0]; // Get first part after /
         if (path) {
-            const redirects = JSON.parse(localStorage.getItem('redirects') || '{}');
-            const target = redirects[path];
+            const redirects = JSON.parse(localStorage.getItem('myRedirects') || '{}');
+            const target = redirects[path.toLowerCase()];
             if (target) {
+                // Show clean redirect page
                 document.write(`
-                    <p>Redirecting to <a href="${target}">${target}</a>...</p>
+                    <h2>Redirecting...</h2>
+                    <p>Taking you to: <a href="${target}">${target}</a></p>
                     <meta http-equiv="refresh" content="0; url=${target}">
                 `);
-                window.location.href = target; // JS fallback
+                window.location.href = target;
             } else {
-                document.write('<p>Short link not found. <a href="/">Go home</a></p>');
+                document.write(`
+                    <h2>Link Not Found</h2>
+                    <p>Sorry, no redirect exists for this short link.</p>
+                    <p><a href="/">← Back to shortener</a></p>
+                `);
             }
+        }
+    </script>
+
+    <!-- Main Form (only shows on home page) -->
+    <div id="form" style="display: ${window.location.pathname === '/' || window.location.pathname === '' ? 'block' : 'none'};">
+        <h1>Custom URL Shortener</h1>
+        <p>Create a beautiful short link like <strong>etg.com</strong> → your site!</p>
+
+        <input type="text" id="longUrl" placeholder="Long URL (e.g. https://elios-training-grounds.weebly.com/)">
+        <br>
+        <input type="text" id="customSlug" placeholder="Custom text (e.g. etg → becomes etg.com)">
+        <br>
+        <button onclick="createShortLink()">Create Short Link</button>
+
+        <div id="result"></div>
+
+        <p class="note">
+            Your short links are saved in your browser and work across devices<br>
+            if you use the same browser. Share them freely!
+        </p>
+    </div>
+
+    <script>
+        function getDomainExtension(url) {
+            try {
+                const hostname = new URL(url).hostname;
+                const parts = hostname.split('.');
+                if (parts.length >= 2) {
+                    const tld = parts.slice(-2).join('.'); // handles .co.uk, .com.br etc.
+                    const commonTlds = ['com', 'net', 'org', 'io', 'co', 'me', 'gg', 'link', 'app', 'dev'];
+                    const lastPart = parts[parts.length - 1];
+                    if (commonTlds.includes(lastPart)) {
+                        return '.' + lastPart;
+                    }
+                    if (tld.match(/co\.[a-z]{2}|com\.[a-z]{2}/)) {
+                        return '.' + tld;
+                    }
+                }
+            } catch (e) {}
+            return '.com'; // fallback
         }
 
         function createShortLink() {
             const longUrlInput = document.getElementById('longUrl').value.trim();
-            const slugInput = document.getElementById('customSlug').value.trim();
+            const slugInput = document.getElementById('customSlug').value.trim().toLowerCase();
 
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = '';
             resultDiv.className = '';
 
-            // Validate long URL
-            let url;
+            // Validate URL
+            let fullUrl;
             try {
-                url = new URL(longUrlInput.startsWith('http') ? longUrlInput : 'https://' + longUrlInput);
+                fullUrl = new URL(longUrlInput.startsWith('http') ? longUrlInput : 'https://' + longUrlInput);
             } catch (e) {
-                resultDiv.innerHTML = '<span class="error">Invalid long URL — must be a full valid URL (include https://).</span>';
+                resultDiv.innerHTML = '<div class="error">Please enter a valid URL (include https://)</div>';
                 return;
             }
 
             // Validate slug
             if (!slugInput) {
-                resultDiv.innerHTML = '<span class="error">Custom short text is required.</span>';
+                resultDiv.innerHTML = '<div class="error">Custom text is required</div>';
                 return;
             }
             if (!/^[a-zA-Z0-9_-]+$/.test(slugInput)) {
-                resultDiv.innerHTML = '<span class="error">Custom text can only contain letters, numbers, hyphens (-), and underscores (_). No spaces or special characters.</span>';
+                resultDiv.innerHTML = '<div class="error">Only letters, numbers, hyphens (-), and underscores (_) allowed. No spaces!</div>';
                 return;
             }
 
-            // Save redirect
-            const redirects = JSON.parse(localStorage.getItem('redirects') || '{}');
-            redirects[slugInput] = url.href;
-            localStorage.setItem('redirects', JSON.stringify(redirects));
+            // Get nice domain ending (e.g. .com)
+            const extension = getDomainExtension(fullUrl.href);
 
-            // Generate short link
-            const shortLink = `${window.location.origin}/${slugInput}`;
+            // Save redirect (key is lowercase for case-insensitivity)
+            const redirects = JSON.parse(localStorage.getItem('myRedirects') || '{}');
+            redirects[slugInput] = fullUrl.href;
+            localStorage.setItem('myRedirects', JSON.stringify(redirects));
+
+            // Build pretty display link
+            const prettyLink = `https://${slugInput}${extension}`;
+
+            // Real short link (what actually works)
+            const realLink = `${window.location.origin}/${slugInput}`;
 
             resultDiv.innerHTML = `
-                <strong>Success!</strong><br>
-                Your short link: <a href="${shortLink}" target="_blank">${shortLink}</a><br><br>
-                It redirects to: ${url.href}
+                <h2>✅ Success!</h2>
+                <p>Your beautiful short link:</p>
+                <div class="short-link">
+                    <a href="${realLink}" target="_blank">${prettyLink}</a>
+                </div>
+                <p><small>(Click to test • Share this link!)</small></p>
+                <hr>
+                <p>Redirects to:<br><strong>${fullUrl.href}</strong></p>
             `;
         }
     </script>
 
-    <p><small>Powered by GitHub Pages • Redirects stored in your browser only.</small></p>
 </body>
 </html>
